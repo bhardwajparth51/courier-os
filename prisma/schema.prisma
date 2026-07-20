@@ -1,0 +1,1142 @@
+// CourierOS — DTDC Franchise Operations Management System
+// Prisma Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum Role {
+  OWNER
+  MANAGER
+  COUNTER_STAFF
+  DELIVERY_STAFF
+  ACCOUNTS
+  READ_ONLY
+  EMPLOYEE  // legacy — kept for backward compatibility
+  CUSTOMER
+}
+
+enum ShipmentStatus {
+  BOOKED
+  AWAITING_PICKUP
+  COLLECTED
+  ORIGIN_HUB
+  REGIONAL_HUB
+  SORTING_CENTER
+  DESTINATION_HUB
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+  RTO // Return to Origin
+}
+
+enum ServiceType {
+  EXPRESS
+  STANDARD
+  SURFACE
+  INTERNATIONAL
+}
+
+enum ParcelType {
+  DOCUMENT
+  PARCEL
+  HEAVY_CARGO
+  FRAGILE
+  LIQUID
+}
+
+enum PaymentMethod {
+  CASH
+  UPI
+  CARD
+  COD
+}
+
+enum PaymentStatus {
+  PENDING
+  COLLECTED
+  FAILED
+  REFUNDED
+}
+
+enum InventoryTransactionType {
+  STOCK_IN
+  STOCK_OUT
+}
+
+// ─────────────────────────────────────────────
+// AUTH MODELS
+// ─────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String? // hashed with bcryptjs
+  phone         String?
+  role          Role      @default(CUSTOMER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts Account[]
+  sessions Session[]
+
+  customer Customer?
+  employee Employee?
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─────────────────────────────────────────────
+// BRANCH / FRANCHISE
+// ─────────────────────────────────────────────
+
+model Branch {
+  id        String   @id @default(cuid())
+  name      String
+  address   String
+  city      String
+  state     String
+  pincode   String
+  phone     String
+  email     String?
+  createdAt DateTime @default(now())
+
+  employees  Employee[]
+  shipments  Shipment[]
+  settings   FranchiseSettings?
+  inventory  Inventory[]
+}
+
+model FranchiseSettings {
+  id               String   @id @default(cuid())
+  branchId         String   @unique
+  gstNumber        String
+  branchCode       String
+  dtdcFranchiseId  String
+  ownerName        String
+  ownerPhone       String
+  workingHoursFrom String   @default("09:00")
+  workingHoursTo   String   @default("19:00")
+  pickupSchedule   String   @default("10:00 AM, 04:00 PM")
+  printerConfig    String   @default("default")
+  updatedAt        DateTime @updatedAt
+
+  branch Branch @relation(fields: [branchId], references: [id])
+}
+
+// ─────────────────────────────────────────────
+// CUSTOMER
+// ─────────────────────────────────────────────
+
+enum CustomerCategory {
+  INDIVIDUAL
+  BUSINESS
+}
+
+enum CustomerSource {
+  WALK_IN
+  ONLINE
+  API
+  IMPORT
+}
+
+enum CommunicationType {
+  CALL
+  SMS
+  EMAIL
+  VISIT
+  WHATSAPP
+}
+
+enum DocumentType {
+  AADHAR
+  PAN
+  GST
+  BUSINESS_LICENSE
+  CANCELLED_CHEQUE
+  OTHER
+}
+
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+model Customer {
+  id                   String            @id @default(cuid())
+  userId               String            @unique
+  customerCode         String?           @unique // CUST-2026-XXXX
+  companyName          String?
+  gstNumber            String?
+  phone                String?
+  alternatePhone       String?
+  address              String?
+  city                 String?
+  state                String?
+  pincode              String?
+  category             CustomerCategory  @default(INDIVIDUAL)
+  source               CustomerSource    @default(WALK_IN)
+  creditLimit          Float             @default(0)
+  preferredPaymentMode String?           @default("CASH")
+  preferredService     String?           @default("EXPRESS")
+  preferredPickupTime  String?           @default("Morning")
+  healthScore          Int               @default(85) // 0-100 Score
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  user                 User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shipments            Shipment[]           @relation("SenderShipments")
+  savedAddresses       SavedAddress[]
+  favouriteReceivers   FavouriteReceiver[]
+  customerAddresses    CustomerAddress[]
+  customerNotes        CustomerNote[]
+  communications       CustomerCommunication[]
+  customerDocuments    CustomerDocument[]
+  customerTags         CustomerTagRel[]
+  customerRoutes       CustomerRoute[]
+}
+
+model CustomerAddress {
+  id            String   @id @default(cuid())
+  customerId    String
+  label         String   // "Home", "Office", "Warehouse", "Factory"
+  contactPerson String?
+  phone         String
+  address       String
+  city          String
+  state         String
+  pincode       String
+  isDefault     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+}
+
+model CustomerNote {
+  id         String   @id @default(cuid())
+  customerId String
+  employeeId String?
+  authorName String   @default("Staff Operator")
+  note       String
+  createdAt  DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+}
+
+model CustomerCommunication {
+  id         String            @id @default(cuid())
+  customerId String
+  type       CommunicationType @default(CALL)
+  subject    String
+  message    String
+  employeeId String?
+  loggedBy   String            @default("Staff Operator")
+  createdAt  DateTime          @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+}
+
+model CustomerDocument {
+  id         String             @id @default(cuid())
+  customerId String
+  type       DocumentType       @default(GST)
+  fileUrl    String
+  fileName   String?
+  status     VerificationStatus @default(PENDING)
+  uploadedAt DateTime           @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+}
+
+model CustomerTagRel {
+  id         String   @id @default(cuid())
+  customerId String
+  tag        String   // "Business", "Regular", "VIP", "COD Heavy", "Corporate"
+  createdAt  DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  @@unique([customerId, tag])
+}
+
+model CustomerRoute {
+  id              String   @id @default(cuid())
+  customerId      String
+  originCity      String
+  destinationCity String
+  shipmentCount   Int      @default(1)
+  lastUsedAt      DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  @@unique([customerId, originCity, destinationCity])
+}
+
+model SavedAddress {
+  id         String   @id @default(cuid())
+  customerId String
+  label      String   // "Home", "Office", "Parents"
+  name       String
+  phone      String
+  address    String
+  city       String
+  state      String
+  pincode    String
+  createdAt  DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+}
+
+model FavouriteReceiver {
+  id         String   @id @default(cuid())
+  customerId String
+  name       String
+  phone      String
+  address    String
+  city       String
+  state      String
+  pincode    String
+  createdAt  DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+}
+
+// ─────────────────────────────────────────────
+// EMPLOYEE
+// ─────────────────────────────────────────────
+
+model Employee {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  branchId         String
+  staffId          String   @unique
+  designation      String   @default("Franchise Staff")
+  phone            String?
+  joiningDate      DateTime @default(now())
+  isActive         Boolean  @default(true)
+  performanceScore Float    @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  branch   Branch     @relation(fields: [branchId], references: [id])
+  shipments Shipment[] @relation("HandledByEmployee")
+  pickups  Pickup[]
+}
+
+// ─────────────────────────────────────────────
+// SHIPMENT
+// ─────────────────────────────────────────────
+
+model Shipment {
+  id              String         @id @default(cuid())
+  awbNumber       String         @unique // Air Waybill Number
+  branchId        String
+
+  // Sender
+  senderName      String
+  senderPhone     String
+  senderAddress   String
+  senderCity      String
+  senderState     String
+  senderPincode   String
+  customerId      String?
+
+  // Receiver
+  receiverName    String
+  receiverPhone   String
+  receiverAddress String
+  receiverCity    String
+  receiverState   String
+  receiverPincode String
+
+  // Parcel
+  parcelType      ParcelType     @default(PARCEL)
+  weight          Float          // in kg
+  length          Float?         // cm
+  width           Float?         // cm
+  height          Float?         // cm
+  declaredValue   Float          @default(0) // INR
+  hasInsurance    Boolean        @default(false)
+  insuranceAmount Float          @default(0)
+  description     String?
+
+  // Service
+  serviceType     ServiceType    @default(STANDARD)
+  status          ShipmentStatus @default(BOOKED)
+  pickupRequired  Boolean        @default(false)
+
+  // Financial
+  freightCharge   Float
+  fuelSurcharge   Float          @default(0)
+  insuranceCharge Float          @default(0)
+  codAmount       Float          @default(0)
+  totalAmount     Float
+
+  paymentMethod   PaymentMethod  @default(CASH)
+  handledById     String?
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  expectedDelivery DateTime?
+
+  branch          Branch         @relation(fields: [branchId], references: [id])
+  customer        Customer?      @relation("SenderShipments", fields: [customerId], references: [id])
+  handledBy       Employee?      @relation("HandledByEmployee", fields: [handledById], references: [id])
+  trackingEvents  TrackingEvent[]
+  payment         Payment?
+  pickup          Pickup?
+  invoice         Invoice?
+}
+
+// ─────────────────────────────────────────────
+// TRACKING
+// ─────────────────────────────────────────────
+
+model TrackingEvent {
+  id          String         @id @default(cuid())
+  shipmentId  String
+  status      ShipmentStatus
+  location    String
+  description String
+  updatedBy   String?        @default("System")
+  timestamp   DateTime       @default(now())
+
+  shipment Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+}
+
+// ─────────────────────────────────────────────
+// PAYMENT
+// ─────────────────────────────────────────────
+
+model Payment {
+  id           String        @id @default(cuid())
+  shipmentId   String        @unique
+  method       PaymentMethod
+  amount       Float
+  codAmount    Float         @default(0)
+  status       PaymentStatus @default(PENDING)
+  reference    String?       // UPI transaction ref, card last 4, etc.
+  collectedAt  DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  shipment Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+}
+
+// ─────────────────────────────────────────────
+// PICKUP
+// ─────────────────────────────────────────────
+
+model Pickup {
+  id           String    @id @default(cuid())
+  shipmentId   String    @unique
+  employeeId   String?
+  scheduledAt  DateTime
+  collectedAt  DateTime?
+  address      String
+  city         String
+  notes        String?
+  createdAt    DateTime  @default(now())
+
+  shipment Shipment  @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  employee Employee? @relation(fields: [employeeId], references: [id])
+}
+
+// ─────────────────────────────────────────────
+// INVOICE
+// ─────────────────────────────────────────────
+
+model Invoice {
+  id            String   @id @default(cuid())
+  shipmentId    String   @unique
+  invoiceNumber String   @unique
+  amount        Float
+  tax           Float    @default(0)
+  total         Float
+  issuedAt      DateTime @default(now())
+
+  shipment Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+}
+
+// ─────────────────────────────────────────────
+// INVENTORY
+// ─────────────────────────────────────────────
+
+model Inventory {
+  id              String   @id @default(cuid())
+  branchId        String
+  itemName        String
+  category        String   // "Packaging", "Printing", "Office"
+  currentStock    Int      @default(0)
+  reorderLevel    Int      @default(10)
+  unit            String   @default("pcs") // pcs, rolls, boxes
+  vendor          String?
+  lastPurchaseDate DateTime?
+  updatedAt       DateTime @updatedAt
+
+  branch       Branch                  @relation(fields: [branchId], references: [id])
+  transactions InventoryTransaction[]
+}
+
+model InventoryTransaction {
+  id          String                   @id @default(cuid())
+  inventoryId String
+  type        InventoryTransactionType
+  quantity    Int
+  reference   String?                  // e.g., "PO-2024-001"
+  note        String?
+  vendor      String?
+  date        DateTime                 @default(now())
+
+  inventory Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
+}
+
+// ─────────────────────────────────────────────
+// SYSTEM ACTIVITY LOG
+// ─────────────────────────────────────────────
+
+model ActivityLog {
+  id          String   @id @default(cuid())
+  action      String   // e.g. "SHIPMENT_CREATED", "STATUS_UPDATED", "LABEL_PRINTED", "INVOICE_PRINTED", "PAYMENT_COLLECTED"
+  entity      String   // "Shipment"
+  entityId    String
+  performedBy String   // Staff name / ID
+  performedAt DateTime @default(now())
+  metadata    String?  @db.Text // JSON string diff
+}
+
+// ─────────────────────────────────────────────
+// PHASE 2: LOGISTICS OPERATIONS MODELS
+// ─────────────────────────────────────────────
+
+enum PickupStatus {
+  PENDING
+  ASSIGNED
+  COMPLETED
+  CANCELLED
+}
+
+enum BagStatus {
+  OPEN
+  SEALED
+  DISPATCHED
+  RECEIVED
+}
+
+enum RunStatus {
+  CREATED
+  IN_PROGRESS
+  COMPLETED
+}
+
+model PickupRequest {
+  id                 String       @id @default(cuid())
+  pickupNumber       String       @unique
+  customerId         String?
+  senderName         String
+  senderPhone        String
+  address            String
+  city               String
+  pincode            String
+  scheduledDate      DateTime
+  preferredTime      String       @default("Morning (10 AM - 1 PM)")
+  status             PickupStatus @default(PENDING)
+  assignedEmployeeId String?
+  remarks            String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  attempts PickupAttempt[]
+}
+
+model PickupAttempt {
+  id          String   @id @default(cuid())
+  pickupId    String
+  employeeId  String?
+  status      String   // "COMPLETED", "SENDER_UNAVAILABLE", "CANCELLED"
+  remarks     String?
+  createdAt   DateTime @default(now())
+
+  pickup PickupRequest @relation(fields: [pickupId], references: [id], onDelete: Cascade)
+}
+
+model CourierBag {
+  id             String    @id @default(cuid())
+  bagNumber      String    @unique
+  sealNumber     String?   @unique
+  originHub      String
+  destinationHub String
+  status         BagStatus @default(OPEN)
+  isLocked       Boolean   @default(false)
+  vehicleNumber  String?
+  handledBy      String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  bagShipments BagShipment[]
+  manifest     DispatchManifest?
+}
+
+model BagShipment {
+  id         String   @id @default(cuid())
+  bagId      String
+  shipmentId String
+  scannedAt  DateTime @default(now())
+
+  bag CourierBag @relation(fields: [bagId], references: [id], onDelete: Cascade)
+}
+
+model DispatchManifest {
+  id             String   @id @default(cuid())
+  manifestNumber String   @unique
+  bagId          String   @unique
+  destinationHub String
+  totalShipments Int      @default(0)
+  totalWeight    Float    @default(0)
+  handledBy      String?
+  createdAt      DateTime @default(now())
+
+  bag CourierBag @relation(fields: [bagId], references: [id], onDelete: Cascade)
+}
+
+model DeliveryRun {
+  id            String    @id @default(cuid())
+  runNumber     String    @unique
+  employeeId    String?
+  vehicleNumber String?
+  date          DateTime  @default(now())
+  status        RunStatus @default(CREATED)
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime  @default(now())
+
+  runShipments RunShipment[]
+}
+
+model RunShipment {
+  id            String   @id @default(cuid())
+  runId         String
+  shipmentId    String
+  sequenceOrder Int      @default(1)
+  status        String   @default("PENDING") // "PENDING", "DELIVERED", "FAILED"
+
+  run DeliveryRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+}
+
+model ProofOfDelivery {
+  id           String   @id @default(cuid())
+  shipmentId   String   @unique
+  receiverName String
+  otpCode      String?
+  otpVerified  Boolean  @default(false)
+  signatureUrl String?  @db.Text // Canvas Base64 data URL
+  deliveredAt  DateTime @default(now())
+}
+
+model FailedDeliveryAttempt {
+  id              String   @id @default(cuid())
+  shipmentId      String
+  employeeId      String?
+  reason          String   // "CUSTOMER_UNAVAILABLE", "WRONG_ADDRESS", "REFUSED", "PHONE_UNREACHABLE"
+  action          String   @default("RETRY_TOMORROW") // "RETRY_TOMORROW", "RETURN_TO_ORIGIN"
+  remarks         String?
+  nextAttemptDate DateTime?
+  createdAt       DateTime @default(now())
+}
+
+// ─────────────────────────────────────────────
+// FINANCE & ACCOUNTING
+// ─────────────────────────────────────────────
+
+enum CashSessionStatus {
+  OPEN
+  CLOSED
+}
+
+enum CashTransactionType {
+  INCOME
+  EXPENSE
+  TRANSFER
+  REFUND
+}
+
+enum CashCategory {
+  BOOKING
+  COD
+  EXPENSE
+  SALARY
+  BANK_DEPOSIT
+  MISC
+}
+
+enum ExpenseCategory {
+  RENT
+  FUEL
+  ELECTRICITY
+  INTERNET
+  SALARY
+  COURIER_BAGS
+  THERMAL_ROLLS
+  PRINTER
+  PACKAGING
+  MAINTENANCE
+  MARKETING
+  MISC
+}
+
+enum ExpenseStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum CODReconciliationStatus {
+  COLLECTED
+  DRIVER_HOLDING
+  BRANCH_RECEIVED
+  DTDC_SENT
+  SETTLED
+}
+
+model CashSession {
+  id              String            @id @default(cuid())
+  branchId        String
+  openedBy        String
+  closedBy        String?
+  openingBalance  Float             @default(0)
+  closingBalance  Float             @default(0)
+  expectedClosing Float             @default(0)
+  difference      Float             @default(0)
+  openedAt        DateTime          @default(now())
+  closedAt        DateTime?
+  status          CashSessionStatus @default(OPEN)
+
+  transactions    CashTransaction[]
+}
+
+model CashTransaction {
+  id            String              @id @default(cuid())
+  sessionId     String
+  type          CashTransactionType
+  category      CashCategory
+  amount        Float
+  paymentMode   String              // "CASH", "UPI", "CARD"
+  referenceId   String?             // e.g. shipmentId, expenseId
+  description   String?
+  createdBy     String
+  createdAt     DateTime            @default(now())
+
+  session       CashSession         @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model Expense {
+  id            String          @id @default(cuid())
+  vendor        String
+  category      ExpenseCategory
+  amount        Float
+  gstAmount     Float           @default(0)
+  billNumber    String?
+  attachmentUrl String?
+  status        ExpenseStatus   @default(PENDING)
+  submittedBy   String
+  approvedBy    String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+}
+
+model CustomerPayment {
+  id          String   @id @default(cuid())
+  customerId  String
+  amount      Float
+  paymentMode String   // "CASH", "UPI", "CARD", "NET_BANKING", "CREDIT"
+  reference   String?
+  createdBy   String
+  createdAt   DateTime @default(now())
+}
+
+model CODSettlement {
+  id            String                  @id @default(cuid())
+  shipmentId    String                  @unique
+  driverId      String?
+  amount        Float
+  status        CODReconciliationStatus @default(COLLECTED)
+  reconciledBy  String?
+  reconciledAt  DateTime?
+}
+
+model BankDeposit {
+  id           String    @id @default(cuid())
+  depositDate  DateTime  @default(now())
+  bankName     String
+  bankId       String?
+  amount       Float
+  slipNumber   String
+  depositedBy  String
+  verifiedBy   String?
+  verifiedAt   DateTime?
+
+  bank         Bank?     @relation(fields: [bankId], references: [id])
+}
+
+// ─────────────────────────────────────────────
+// PHASE 5A: MASTER DATA
+// ─────────────────────────────────────────────
+
+// Delivery zones for rate calculation
+model Zone {
+  id          String   @id @default(cuid())
+  code        String   @unique // "A", "B", "C", "D", "E"
+  name        String           // "Metro", "Regional", "Remote"
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  pincodes  ZonePincode[]
+  rateSlabs RateSlab[]
+
+  @@index([code])
+}
+
+// Pincode → Zone mapping
+model ZonePincode {
+  id      String @id @default(cuid())
+  pincode String @unique
+  city    String
+  state   String
+  zoneId  String
+
+  zone Zone @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+
+  @@index([pincode])
+  @@index([zoneId])
+}
+
+// Banks used for cash deposits
+model Bank {
+  id            String   @id @default(cuid())
+  name          String
+  accountNumber String?
+  ifscCode      String?
+  branchName    String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  deposits BankDeposit[]
+}
+
+// Vehicle types for delivery staff
+model VehicleType {
+  id          String  @id @default(cuid())
+  name        String  @unique // "Bike", "Auto", "Van", "Tempo"
+  description String?
+  isActive    Boolean @default(true)
+}
+
+// Packaging types with optional price add-on
+model PackagingType {
+  id          String  @id @default(cuid())
+  name        String  @unique // "Document Envelope", "Small Box", "Large Box"
+  description String?
+  dimensions  String?          // "30×20×5 cm"
+  maxWeightKg Float?
+  priceAddOn  Float   @default(0) // extra charge in ₹
+  isActive    Boolean @default(true)
+}
+
+// Configurable service types (replaces hardcoded ServiceType enum over time)
+model ServiceTypeConfig {
+  id          String  @id @default(cuid())
+  name        String           // "Express", "Standard", "Surface"
+  code        String  @unique  // "EXPRESS", "STANDARD", "SURFACE", "INTERNATIONAL"
+  description String?
+  transitDays Int     @default(3)
+  multiplier  Float   @default(1.0) // rate multiplier over base
+  isActive    Boolean @default(true)
+}
+
+// Configurable expense categories (mirrors ExpenseCategory enum, but DB-driven)
+model ExpenseCategoryConfig {
+  id          String  @id @default(cuid())
+  name        String  @unique  // "Rent", "Fuel", "Salary"
+  code        String  @unique  // "RENT", "FUEL", "SALARY" — maps to existing enum
+  description String?
+  isActive    Boolean @default(true)
+}
+
+// Configurable payment modes
+model PaymentModeConfig {
+  id       String  @id @default(cuid())
+  name     String           // "Cash", "UPI", "Card", "COD"
+  code     String  @unique  // "CASH", "UPI", "CARD", "COD"
+  isActive Boolean @default(true)
+}
+
+// ─────────────────────────────────────────────
+// PHASE 5B: RATE CARD & PRICING ENGINE
+// ─────────────────────────────────────────────
+
+// A named rate card (e.g. "Standard 2026", "Corporate Q1")
+model RateCard {
+  id          String     @id @default(cuid())
+  name        String
+  description String?
+  isActive    Boolean    @default(false) // only one active at a time
+  effectiveFrom DateTime @default(now())
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  slabs       RateSlab[]
+}
+
+// Weight-slab rate for a given zone + service type combination
+model RateSlab {
+  id              String  @id @default(cuid())
+  rateCardId      String
+  zoneId          String
+  serviceCode     String  // "EXPRESS", "STANDARD", "SURFACE"
+  minWeightGrams  Int     // e.g. 0
+  maxWeightGrams  Int     // e.g. 500
+  baseRate        Float   // ₹ for this slab
+  additionalRate  Float   @default(0) // ₹ per additional 500g beyond slab
+
+  rateCard RateCard @relation(fields: [rateCardId], references: [id], onDelete: Cascade)
+  zone     Zone     @relation(fields: [zoneId], references: [id])
+
+  @@index([rateCardId])
+  @@index([zoneId, serviceCode])
+}
+
+// Global surcharge configuration
+model SurchargeConfig {
+  id                 String  @id @default(cuid())
+  fuelSurchargePct   Float   @default(0)    // % of base freight
+  odaChargeFlat      Float   @default(0)    // ₹ flat for out-of-delivery-area
+  codChargePct       Float   @default(1.0)  // % of COD amount
+  codChargeMin       Float   @default(30)   // minimum COD fee ₹
+  insurancePct       Float   @default(0.5)  // % of declared value
+  insuranceMin       Float   @default(50)   // minimum insurance fee ₹
+  gstPct             Float   @default(18)   // GST %
+  updatedAt          DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────
+// PHASE 6A: SETTINGS & ADMINISTRATION
+// ─────────────────────────────────────────────
+
+// Key-value store for system-wide configuration
+model SystemSetting {
+  key       String   @id            // e.g. "smtp_host", "invoice_prefix"
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
+}
+
+// Notification templates for SMS / WhatsApp / Email
+enum NotificationChannel {
+  SMS
+  WHATSAPP
+  EMAIL
+}
+
+model NotificationTemplate {
+  id        String              @id @default(cuid())
+  name      String              @unique  // e.g. "shipment_booked"
+  channel   NotificationChannel
+  subject   String?             // Email subject line
+  body      String              @db.Text // {{awb}}, {{sender}}, {{amount}} placeholders
+  variables String?             // JSON array of available variable names
+  enabled   Boolean             @default(true)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+}
+
+// Full audit trail of all mutations
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  userEmail String?
+  action    String   // "CREATE", "UPDATE", "DELETE"
+  entity    String   // "Shipment", "Customer", "Expense", etc.
+  entityId  String
+  oldValue  String?  @db.Text  // JSON
+  newValue  String?  @db.Text  // JSON
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// Security events log
+enum SecurityEventType {
+  LOGIN
+  FAILED_LOGIN
+  LOGOUT
+  PASSWORD_CHANGED
+  ROLE_CHANGED
+  USER_CREATED
+  USER_DISABLED
+  TWO_FA_ENABLED
+}
+
+model SecurityLog {
+  id        String            @id @default(cuid())
+  userId    String?
+  userEmail String?
+  event     SecurityEventType
+  ipAddress String?
+  userAgent String?
+  metadata  String?           @db.Text  // JSON extra context
+  createdAt DateTime          @default(now())
+
+  @@index([userId])
+  @@index([event])
+  @@index([createdAt])
+}
+
+// ─────────────────────────────────────────────
+// PHASE 6C: RBAC
+// ─────────────────────────────────────────────
+
+// Fine-grained permissions per role
+model Permission {
+  id      String @id @default(cuid())
+  role    Role
+  module  String // "bookings", "customers", "finance", "reports", "dispatch", "settings", "rates", "master-data"
+  canRead    Boolean @default(true)
+  canWrite   Boolean @default(false)
+  canDelete  Boolean @default(false)
+
+  @@unique([role, module])
+  @@index([role])
+}
+
+// ─────────────────────────────────────────────
+// UNIFIED NOTIFICATION & COMMUNICATION CENTER
+// ─────────────────────────────────────────────
+
+enum NotificationCategory {
+  OPERATIONS
+  FINANCE
+  CRM
+  SECURITY
+  SYSTEM
+}
+
+enum NotificationPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// In-app notifications stored per user / role
+model Notification {
+  id         String               @id @default(cuid())
+  userId     String?
+  role       Role?
+  category   NotificationCategory @default(OPERATIONS)
+  priority   NotificationPriority @default(MEDIUM)
+  title      String
+  message    String               @db.Text
+  link       String?
+  isRead     Boolean              @default(false)
+  isArchived Boolean              @default(false)
+  createdAt  DateTime             @default(now())
+
+  @@index([userId, isRead])
+  @@index([role])
+  @@index([category])
+}
+
+// Customer notification preferences
+model NotificationPreference {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  bookingUpdates  Boolean  @default(true)
+  pickupUpdates   Boolean  @default(true)
+  deliveryUpdates Boolean  @default(true)
+  promotions      Boolean  @default(false)
+  emailEnabled    Boolean  @default(true)
+  smsEnabled      Boolean  @default(true)
+  whatsappEnabled Boolean  @default(true)
+  updatedAt       DateTime @updatedAt
+}
+
+// Async notification queue
+model NotificationQueue {
+  id           String              @id @default(cuid())
+  channel      NotificationChannel
+  recipient    String
+  templateName String
+  payload      String              @db.Text // JSON string of variables
+  status       String              @default("PENDING") // PENDING, SENT, FAILED
+  attempts     Int                 @default(0)
+  errorMessage String?             @db.Text
+  scheduledFor DateTime            @default(now())
+  createdAt    DateTime            @default(now())
+
+  @@index([status])
+}
+
+// Delivery audit log of outbound messages
+model NotificationLog {
+  id        String              @id @default(cuid())
+  channel   NotificationChannel
+  recipient String
+  subject   String?
+  body      String              @db.Text
+  status    String              // "SUCCESS" | "FAILED"
+  provider  String              // "mock" | "msg91" | "smtp"
+  sentAt    DateTime            @default(now())
+
+  @@index([recipient])
+  @@index([sentAt])
+}
+

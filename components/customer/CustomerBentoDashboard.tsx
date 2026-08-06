@@ -227,8 +227,7 @@ export function CustomerBentoDashboard({
                   </thead>
                   <tbody>
                     {recentShipments.map((s) => {
-                      const st = STATUS_BADGE[s.status] ?? { label: s.status, cls: "badge badge-gray", icon: Clock };
-                      const StatusIcon = st.icon;
+                      const st = STATUS_BADGE[s.status] ?? { label: s.status, bg: "#F1F5F9", color: "#475569", dot: "#94A3B8" };
                       const formattedCity = s.receiverCity
                         ? s.receiverCity.charAt(0).toUpperCase() + s.receiverCity.slice(1).toLowerCase()
                         : "N/A";
@@ -288,8 +287,18 @@ export function CustomerBentoDashboard({
 
                           {/* Status Badge */}
                           <td style={{ padding: "13px 18px" }}>
-                            <span className={st.cls}>
-                              <StatusIcon size={12} />
+                            <span style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 6,
+                              padding: "3px 9px",
+                              borderRadius: 99,
+                              fontSize: 11.5,
+                              fontWeight: 600,
+                              background: st.bg,
+                              color: st.color,
+                            }}>
+                              <span style={{ width: 6, height: 6, borderRadius: "50%", background: st.dot }} />
                               {st.label}
                             </span>
                           </td>

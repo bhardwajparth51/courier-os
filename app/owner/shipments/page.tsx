@@ -5,17 +5,31 @@ import { ShipmentTable } from "@/components/shipments/ShipmentTable";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 
+import { getOwnerDashboardDemoData } from "@/lib/demoData";
+
 export const dynamic = "force-dynamic";
 
 export default async function OwnerShipmentsPage() {
-  const shipments = await prisma.shipment.findMany({
-    orderBy: { createdAt: "desc" },
-    include: {
-      payment: { select: { status: true, method: true } },
-      branch: { select: { name: true, city: true, phone: true } },
-    },
-    take: 100,
-  });
+  let shipments: any[] = [];
+  try {
+    shipments = await prisma.shipment.findMany({
+      orderBy: { createdAt: "desc" },
+      include: {
+        payment: { select: { status: true, method: true } },
+        branch: { select: { name: true, city: true, phone: true } },
+      },
+      take: 100,
+    });
+  } catch (err) {
+    console.warn("[OwnerShipmentsPage] DB query failed, loading demo fallback:", err);
+    const demo = getOwnerDashboardDemoData();
+    shipments = demo.recentShipments.map((s, idx) => ({
+      id: `shp-demo-${idx}`,
+      ...s,
+      payment: { status: "COLLECTED", method: s.paymentMethod },
+      branch: { name: "DTDC Pune Central", city: "Pune", phone: "9822012345" },
+    }));
+  }
 
   return (
     <div>

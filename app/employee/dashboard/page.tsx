@@ -3,74 +3,115 @@ import { prisma } from "@/lib/prisma";
 import { Header } from "@/components/Header";
 import { EmployeeBentoDashboard } from "@/components/employee/EmployeeBentoDashboard";
 
+import { getEmployeeDashboardDemoData } from "@/lib/demoData";
+
 export default async function EmployeeDashboardPage() {
   const session = await auth();
-  const userId = session!.user.id;
+  const userId = session?.user?.id;
 
-  const employee = await prisma.employee.findUnique({
-    where: { userId },
-    include: { branch: true },
-  });
+  let employee: any = null;
+  let todayBookings = 0;
+  let yesterdayBookings = 0;
+  let pendingPickups = 0;
+  let completedToday = 0;
+  let yesterdayCompleted = 0;
+  let recentShipments: any[] = [];
+  let recentCustomers: any[] = [];
+  let outForDelivery = 0;
+  let serviceGrouped: any[] = [];
+  let yearShipments: any[] = [];
+  let isDemoMode = false;
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
+  try {
+    if (userId) {
+      employee = await prisma.employee.findUnique({
+        where: { userId },
+        include: { branch: true },
+      });
+    }
 
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
 
-  const empFilter = employee ? { handledById: employee.id } : {};
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
 
-  // Date 12 months ago
-  const twelveMonthsAgo = new Date();
-  twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 11);
-  twelveMonthsAgo.setDate(1);
-  twelveMonthsAgo.setHours(0, 0, 0, 0);
+    const empFilter = employee ? { handledById: employee.id } : {};
 
-  const [
-    todayBookings, yesterdayBookings, pendingPickups, completedToday, yesterdayCompleted,
-    recentShipments, recentCustomers, outForDelivery, serviceGrouped, yearShipments
-  ] = await Promise.all([
-    prisma.shipment.count({ where: { ...empFilter, createdAt: { gte: today, lt: tomorrow } } }),
-    prisma.shipment.count({ where: { ...empFilter, createdAt: { gte: yesterday, lt: today } } }),
-    prisma.shipment.count({ where: { status: { in: ["BOOKED", "AWAITING_PICKUP"] } } }),
-    prisma.shipment.count({ where: { status: "DELIVERED", updatedAt: { gte: today, lt: tomorrow } } }),
-    prisma.shipment.count({ where: { status: "DELIVERED", updatedAt: { gte: yesterday, lt: today } } }),
-    prisma.shipment.findMany({
-      take: 7,
-      orderBy: { createdAt: "desc" },
-      ...(employee ? { where: { handledById: employee.id } } : {}),
-      select: {
-        awbNumber: true, senderName: true, receiverName: true,
-        receiverCity: true, status: true, totalAmount: true,
-        serviceType: true, createdAt: true, paymentMethod: true,
-      },
-    }),
-    prisma.customer.findMany({
-      take: 5,
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        user: { select: { name: true, email: true } },
-        city: true,
-        _count: { select: { shipments: true } },
-        shipments: {
-          select: { totalAmount: true },
+    const twelveMonthsAgo = new Date();
+    twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 11);
+    twelveMonthsAgo.setDate(1);
+    twelveMonthsAgo.setHours(0, 0, 0, 0);
+
+    const [
+      dTodayBookings, dYesterdayBookings, dPendingPickups, dCompletedToday, dYesterdayCompleted,
+      dRecentShipments, dRecentCustomers, dOutForDelivery, dServiceGrouped, dYearShipments
+    ] = await Promise.all([
+      prisma.shipment.count({ where: { ...empFilter, createdAt: { gte: today, lt: tomorrow } } }),
+      prisma.shipment.count({ where: { ...empFilter, createdAt: { gte: yesterday, lt: today } } }),
+      prisma.shipment.count({ where: { status: { in: ["BOOKED", "AWAITING_PICKUP"] } } }),
+      prisma.shipment.count({ where: { status: "DELIVERED", updatedAt: { gte: today, lt: tomorrow } } }),
+      prisma.shipment.count({ where: { status: "DELIVERED", updatedAt: { gte: yesterday, lt: today } } }),
+      prisma.shipment.findMany({
+        take: 7,
+        orderBy: { createdAt: "desc" },
+        ...(employee ? { where: { handledById: employee.id } } : {}),
+        select: {
+          awbNumber: true, senderName: true, receiverName: true,
+          receiverCity: true, status: true, totalAmount: true,
+          serviceType: true, createdAt: true, paymentMethod: true,
         },
-      },
-    }),
-    prisma.shipment.count({ where: { status: "OUT_FOR_DELIVERY" } }),
-    prisma.shipment.groupBy({
-      by: ["serviceType"],
-      _count: { id: true },
-      _sum: { totalAmount: true },
-    }),
-    prisma.shipment.findMany({
-      where: { createdAt: { gte: twelveMonthsAgo } },
-      select: { createdAt: true, totalAmount: true },
-    }),
-  ]);
+      }),
+      prisma.customer.findMany({
+        take: 5,
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          user: { select: { name: true, email: true } },
+          city: true,
+          _count: { select: { shipments: true } },
+          shipments: {
+            select: { totalAmount: true },
+          },
+        },
+      }),
+      prisma.shipment.count({ where: { status: "OUT_FOR_DELIVERY" } }),
+      prisma.shipment.groupBy({
+        by: ["serviceType"],
+        _count: { id: true },
+        _sum: { totalAmount: true },
+      }),
+      prisma.shipment.findMany({
+        where: { createdAt: { gte: twelveMonthsAgo } },
+        select: { createdAt: true, totalAmount: true },
+      }),
+    ]);
+
+    todayBookings = dTodayBookings;
+    yesterdayBookings = dYesterdayBookings;
+    pendingPickups = dPendingPickups;
+    completedToday = dCompletedToday;
+    yesterdayCompleted = dYesterdayCompleted;
+    recentShipments = dRecentShipments;
+    recentCustomers = dRecentCustomers;
+    outForDelivery = dOutForDelivery;
+    serviceGrouped = dServiceGrouped;
+    yearShipments = dYearShipments;
+  } catch (err) {
+    console.warn("[EmployeeDashboardPage] DB query failed, loading demo fallback:", err);
+    isDemoMode = true;
+    const demo = getEmployeeDashboardDemoData();
+    todayBookings = demo.todayBookings;
+    yesterdayBookings = demo.yesterdayBookings;
+    pendingPickups = demo.pendingPickups;
+    completedToday = demo.completedToday;
+    yesterdayCompleted = demo.yesterdayCompleted;
+    recentShipments = demo.recentShipments;
+    recentCustomers = demo.recentCustomers;
+    outForDelivery = demo.outForDelivery;
+  }
 
   // Helper for dynamic trend calculation
   function getTrend(current: number, previous: number) {
@@ -107,11 +148,12 @@ export default async function EmployeeDashboardPage() {
     }
   });
 
-  const dynamicMonthlyTrend = Array.from(monthlyDataMap.values());
+  const demoData = getEmployeeDashboardDemoData();
+  const dynamicMonthlyTrend = isDemoMode ? demoData.dynamicMonthlyTrend : Array.from(monthlyDataMap.values());
 
   // Compute dynamic service breakdown
   const totalServiceCount = serviceGrouped.reduce((acc, curr) => acc + curr._count.id, 0) || 1;
-  const dynamicServiceBreakdown = serviceGrouped.map((s) => ({
+  const dynamicServiceBreakdown = isDemoMode ? demoData.dynamicServiceBreakdown : serviceGrouped.map((s) => ({
     label: s.serviceType === "EXPRESS" ? "Air Express" : s.serviceType === "SURFACE" ? "Surface Freight" : s.serviceType === "STANDARD" ? "Local Courier" : "International",
     count: s._count.id,
     pct: Math.round((s._count.id / totalServiceCount) * 100),
@@ -119,8 +161,8 @@ export default async function EmployeeDashboardPage() {
   }));
 
   // Format customer data with real sums
-  const formattedCustomers = recentCustomers.map((c) => {
-    const totalSpend = c.shipments.reduce((sum, s) => sum + (s.totalAmount || 0), 0);
+  const formattedCustomers = isDemoMode ? demoData.recentCustomers : recentCustomers.map((c) => {
+    const totalSpend = c.shipments ? c.shipments.reduce((sum: number, s: any) => sum + (s.totalAmount || 0), 0) : 0;
     return {
       id: c.id,
       user: c.user,

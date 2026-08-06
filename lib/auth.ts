@@ -30,8 +30,10 @@ const DEMO_USERS: Record<string, { id: string; email: string; name: string; role
 };
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  trustHost: true,
   adapter: PrismaAdapter(prisma),
   session: { strategy: "jwt" },
+
   pages: {
     signIn: "/login",
   },

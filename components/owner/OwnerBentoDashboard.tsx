@@ -420,7 +420,7 @@ export function OwnerBentoDashboard({
             </thead>
             <tbody>
               {filteredShipments.slice(0, 8).map((s) => {
-                const badge = STATUS_BADGE[s.status] ?? { label: s.status, cls: "badge badge-gray" };
+                const badge = STATUS_BADGE[s.status] ?? { label: s.status, bg: "#F1F5F9", color: "#475569", dot: "#94A3B8" };
                 return (
                   <tr key={s.awbNumber}>
                     <td>
@@ -432,7 +432,22 @@ export function OwnerBentoDashboard({
                     <td style={{ fontSize: 13 }}>{s.receiverName}</td>
                     <td style={{ color: "var(--text-muted)", fontSize: 12.5 }}>{s.receiverCity}, {s.receiverState}</td>
                     <td><span className="badge badge-gray" style={{ fontSize: 11 }}>{s.serviceType}</span></td>
-                    <td><span className={badge.cls} style={{ fontSize: 11 }}>{badge.label}</span></td>
+                    <td>
+                      <span style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 5,
+                        padding: "2px 8px",
+                        borderRadius: 99,
+                        fontSize: 11,
+                        fontWeight: 600,
+                        background: badge.bg,
+                        color: badge.color,
+                      }}>
+                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: badge.dot }} />
+                        {badge.label}
+                      </span>
+                    </td>
                     <td style={{ fontWeight: 700, fontSize: 13 }}>₹{s.totalAmount.toLocaleString("en-IN")}</td>
                   </tr>
                 );
@@ -561,7 +576,18 @@ export function OwnerBentoDashboard({
                     <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{ev.location}</div>
                   </div>
                 </div>
-                <span className={STATUS_BADGE[ev.status]?.cls ?? "badge badge-gray"} style={{ fontSize: 10 }}>
+                <span style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 4,
+                  padding: "2px 7px",
+                  borderRadius: 99,
+                  fontSize: 10,
+                  fontWeight: 600,
+                  background: STATUS_BADGE[ev.status]?.bg ?? "#F1F5F9",
+                  color: STATUS_BADGE[ev.status]?.color ?? "#475569",
+                }}>
+                  <span style={{ width: 5, height: 5, borderRadius: "50%", background: STATUS_BADGE[ev.status]?.dot ?? "#94A3B8" }} />
                   {STATUS_BADGE[ev.status]?.label ?? ev.status}
                 </span>
               </div>

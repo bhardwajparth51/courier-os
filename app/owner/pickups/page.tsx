@@ -6,20 +6,28 @@ import { PickupCalendar } from "@/components/operations/PickupCalendar";
 export const dynamic = "force-dynamic";
 
 export default async function OwnerPickupsPage() {
-  const pickups = await prisma.pickupRequest.findMany({
-    orderBy: { createdAt: "desc" },
-    include: { attempts: true },
-  });
+  let pickups: any[] = [];
+  let formattedEmployees: any[] = [];
 
-  const employees = await prisma.employee.findMany({
-    where: { isActive: true },
-    include: { user: { select: { name: true } } },
-  });
+  try {
+    const rawPickups = await prisma.pickupRequest.findMany({
+      orderBy: { createdAt: "desc" },
+      include: { attempts: true },
+    });
+    pickups = rawPickups;
 
-  const formattedEmployees = employees.map((e) => ({
-    id: e.id,
-    name: e.user?.name || e.staffId,
-  }));
+    const employees = await prisma.employee.findMany({
+      where: { isActive: true },
+      include: { user: { select: { name: true } } },
+    });
+
+    formattedEmployees = employees.map((e) => ({
+      id: e.id,
+      name: e.user?.name || e.staffId,
+    }));
+  } catch (err) {
+    console.warn("[OwnerPickupsPage] DB query failed, using empty fallback:", err);
+  }
 
   return (
     <div>

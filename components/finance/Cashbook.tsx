@@ -26,19 +26,26 @@ export function Cashbook() {
     e.preventDefault();
     if (!amount || !activeSession) return;
     setSubmitting(true);
-    await fetch("/api/finance/payments", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        amount: Number(amount),
-        paymentMode: mode,
-        reference: desc || `${type} - ${category}`,
-        customerId: "WALK_IN_CUSTOMER",
-      }),
-    });
-    setAmount(""); setDesc("");
-    setSubmitting(false);
-    fetchSession();
+    try {
+      await fetch("/api/finance/cash-transaction", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: activeSession.id,
+          type,
+          category,
+          amount: Number(amount),
+          paymentMode: mode,
+          description: desc || `${type === "INCOME" ? "Income" : "Expense"} - ${category}`,
+        }),
+      });
+      setAmount(""); setDesc("");
+    } catch (err) {
+      console.error("Failed to add transaction:", err);
+    } finally {
+      setSubmitting(false);
+      fetchSession();
+    }
   };
 
   if (loading) return <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>Loading…</div>;

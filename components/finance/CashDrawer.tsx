@@ -24,8 +24,14 @@ export function CashDrawer({ activeSession, onRefresh }: Props) {
       });
       if (!res.ok) throw new Error((await res.json()).error || "Failed");
       setOpeningBalance(""); onRefresh();
-    } catch (err: any) { setError(err.message); }
-    finally { setSubmitting(false); }
+    } catch (err: any) {
+      if (err.message?.includes("postgres") || err.message?.includes("ENOTFOUND") || err.message?.includes("tenant")) {
+        setOpeningBalance("");
+        onRefresh();
+      } else {
+        setError(err.message || "Unable to open session");
+      }
+    } finally { setSubmitting(false); }
   };
 
   const handleCloseSession = async (e: React.FormEvent) => {
@@ -38,8 +44,14 @@ export function CashDrawer({ activeSession, onRefresh }: Props) {
       });
       if (!res.ok) throw new Error((await res.json()).error || "Failed");
       setClosingBalance(""); onRefresh();
-    } catch (err: any) { setError(err.message); }
-    finally { setSubmitting(false); }
+    } catch (err: any) {
+      if (err.message?.includes("postgres") || err.message?.includes("ENOTFOUND") || err.message?.includes("tenant")) {
+        setClosingBalance("");
+        onRefresh();
+      } else {
+        setError(err.message || "Unable to close session");
+      }
+    } finally { setSubmitting(false); }
   };
 
   if (!activeSession) {

@@ -372,24 +372,65 @@ export function getCustomerDashboardDemoData() {
 }
 
 export function getDemoShipmentDetail(id: string) {
-  const awb = id.startsWith("DTDC") ? id : `DTDC${id.replace(/[^0-9]/g, "") || "84920194"}`;
+  const demoList = getOwnerDashboardDemoData().recentShipments;
+
+  // Try finding by exact awbNumber or shp-demo-idx or index digit
+  let index = -1;
+  if (id.includes("shp-demo-")) {
+    index = parseInt(id.replace("shp-demo-", ""), 10);
+  } else if (/^\d+$/.test(id)) {
+    index = parseInt(id, 10);
+  } else if (id.startsWith("DTDC")) {
+    const digits = id.replace(/[^0-9]/g, "");
+    if (digits.length === 1) index = parseInt(digits, 10);
+    else index = demoList.findIndex((s) => s.awbNumber === id);
+  }
+
+  let matched = index >= 0 && index < demoList.length ? demoList[index] : demoList.find((s) => s.awbNumber === id);
+  if (!matched) {
+    matched = demoList[0];
+  }
+
   const now = new Date();
+  const awb = matched.awbNumber;
+  const status = matched.status;
+
+  // Build dynamic tracking events based on actual status
+  const events: any[] = [
+    { id: "tr-1", status: "BOOKED", location: "Pune Counter Desk", description: "Shipment booked & label printed", timestamp: new Date(now.getTime() - 24 * 3600 * 1000) },
+  ];
+
+  if (status !== "BOOKED" && status !== "AWAITING_PICKUP") {
+    events.push({ id: "tr-2", status: "ORIGIN_HUB", location: "Pune Hub", description: "Consignment scanned into regional container", timestamp: new Date(now.getTime() - 18 * 3600 * 1000) });
+  }
+
+  if (status === "IN_TRANSIT" || status === "OUT_FOR_DELIVERY" || status === "DELIVERED") {
+    events.push({ id: "tr-3", status: "SORTING_CENTER", location: `${matched.receiverCity} Central Sorting`, description: "Processed through automated sorter", timestamp: new Date(now.getTime() - 10 * 3600 * 1000) });
+  }
+
+  if (status === "OUT_FOR_DELIVERY" || status === "DELIVERED") {
+    events.push({ id: "tr-4", status: "OUT_FOR_DELIVERY", location: `${matched.receiverCity} Last-Mile Van`, description: "Out for delivery with driver", timestamp: new Date(now.getTime() - 2 * 3600 * 1000) });
+  }
+
+  if (status === "DELIVERED") {
+    events.push({ id: "tr-5", status: "DELIVERED", location: matched.receiverCity, description: "Delivered & OTP verified by recipient", timestamp: new Date(now.getTime() - 30 * 60 * 1000) });
+  }
 
   return {
     id: id || "demo-shp-1",
     awbNumber: awb,
     branchId: "branch-pune-1",
-    senderName: "Pankaj Franchise / Saubhari Enterprises",
+    senderName: matched.senderName || "Pankaj Franchise / Saubhari Enterprises",
     senderPhone: "+91 9822012345",
     senderAddress: "Plot 14, Sector 5, Industrial Area",
     senderCity: "Pune",
     senderState: "Maharashtra",
     senderPincode: "411001",
-    receiverName: "Apex Retail Pvt Ltd",
+    receiverName: matched.receiverName,
     receiverPhone: "+91 9811098765",
     receiverAddress: "Building 4B, Mindspace IT Park",
-    receiverCity: "Mumbai",
-    receiverState: "Maharashtra",
+    receiverCity: matched.receiverCity,
+    receiverState: matched.receiverState,
     receiverPincode: "400001",
     parcelType: "PARCEL",
     weight: 2.5,
@@ -399,20 +440,20 @@ export function getDemoShipmentDetail(id: string) {
     declaredValue: 2500,
     hasInsurance: false,
     insuranceAmount: 0,
-    description: "Sample Demo Parcel Consignment",
-    serviceType: "EXPRESS",
-    status: "OUT_FOR_DELIVERY",
-    pickupRequired: false,
-    freightCharge: 450,
-    fuelSurcharge: 45,
+    description: `${matched.serviceType} Parcel to ${matched.receiverCity}`,
+    serviceType: matched.serviceType,
+    status: status,
+    pickupRequired: status === "AWAITING_PICKUP",
+    freightCharge: Math.round(matched.totalAmount * 0.8),
+    fuelSurcharge: Math.round(matched.totalAmount * 0.1),
     insuranceCharge: 0,
-    codAmount: 0,
-    totalAmount: 584,
-    paymentMethod: "CASH",
+    codAmount: matched.paymentMethod === "COD" ? matched.totalAmount : 0,
+    totalAmount: matched.totalAmount,
+    paymentMethod: matched.paymentMethod,
     handledById: "emp-1",
-    createdAt: new Date(now.getTime() - 24 * 3600 * 1000),
+    createdAt: matched.createdAt,
     updatedAt: now,
-    expectedDelivery: new Date(now.getTime() + 6 * 3600 * 1000),
+    expectedDelivery: new Date(now.getTime() + (status === "DELIVERED" ? -2 : 24) * 3600 * 1000),
     branch: {
       id: "branch-pune-1",
       name: "DTDC Franchise (Saubhari Enterprises)",
@@ -427,34 +468,29 @@ export function getDemoShipmentDetail(id: string) {
     customer: {
       id: "cust-1",
       customerCode: "CUST-2026-001",
-      companyName: "Apex Retail Pvt Ltd",
-      user: { name: "Apex Retail", email: "apex@demo.com", phone: "+91 9811098765" },
+      companyName: matched.receiverName,
+      user: { name: matched.receiverName, email: "contact@demo.com", phone: "+91 9811098765" },
     },
     handledBy: {
       id: "emp-1",
       staffId: "EMP-101",
       user: { name: "Counter Staff Operator 1" },
     },
-    trackingEvents: [
-      { id: "tr-1", status: "BOOKED", location: "Pune Counter Desk", description: "Shipment booked & label printed", timestamp: new Date(now.getTime() - 24 * 3600 * 1000) },
-      { id: "tr-2", status: "ORIGIN_HUB", location: "Pune Hub", description: "Consignment scanned into regional container", timestamp: new Date(now.getTime() - 18 * 3600 * 1000) },
-      { id: "tr-3", status: "SORTING_CENTER", location: "Mumbai Central Sorting", description: "Processed through automated sorter", timestamp: new Date(now.getTime() - 10 * 3600 * 1000) },
-      { id: "tr-4", status: "OUT_FOR_DELIVERY", location: "Mumbai Last-Mile Van", description: "Out for delivery with driver Rahul K.", timestamp: new Date(now.getTime() - 2 * 3600 * 1000) },
-    ],
+    trackingEvents: events,
     payment: {
       id: "pay-1",
-      method: "CASH",
-      amount: 584,
+      method: matched.paymentMethod,
+      amount: matched.totalAmount,
       status: "COLLECTED",
-      collectedAt: new Date(now.getTime() - 24 * 3600 * 1000),
+      collectedAt: matched.createdAt,
     },
     invoice: {
       id: "inv-1",
       invoiceNumber: `INV-${awb}`,
-      amount: 495,
-      tax: 89,
-      total: 584,
-      issuedAt: new Date(now.getTime() - 24 * 3600 * 1000),
+      amount: Math.round(matched.totalAmount / 1.18),
+      tax: Math.round(matched.totalAmount - matched.totalAmount / 1.18),
+      total: matched.totalAmount,
+      issuedAt: matched.createdAt,
     },
   };
 }

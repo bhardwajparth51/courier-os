@@ -14,6 +14,85 @@ export class FinanceService {
   // In-memory demo fallback session if DB is offline or unreachable
   private static demoSession: any = null;
 
+  private static getInitialDemoSession(branchId: string = "PUNE_CENTRAL", openedBy: string = "Counter Operator 1", openingBalance: number = 5000) {
+    const now = new Date();
+    const t = (minsAgo: number) => new Date(now.getTime() - minsAgo * 60 * 1000);
+
+    const transactions = [
+      {
+        id: "tx-demo-5",
+        sessionId: "demo-session-active",
+        type: "INCOME",
+        category: "BOOKING",
+        amount: 1850,
+        paymentMode: "CASH",
+        description: "AWB #DTDC84920194 — Counter Express Parcel Booking",
+        createdBy: "Counter Operator 1",
+        createdAt: t(12),
+      },
+      {
+        id: "tx-demo-4",
+        sessionId: "demo-session-active",
+        type: "INCOME",
+        category: "COD",
+        amount: 640,
+        paymentMode: "CASH",
+        description: "AWB #DTDC73910284 — COD Cash Collection (Rahul S.)",
+        createdBy: "Counter Operator 1",
+        createdAt: t(10),
+      },
+      {
+        id: "tx-demo-3",
+        sessionId: "demo-session-active",
+        type: "EXPENSE",
+        category: "EXPENSE",
+        amount: 120,
+        paymentMode: "CASH",
+        description: "Tea & Refreshments for Counter Staff & Drivers",
+        createdBy: "Counter Operator 1",
+        createdAt: t(8),
+      },
+      {
+        id: "tx-demo-2",
+        sessionId: "demo-session-active",
+        type: "EXPENSE",
+        category: "EXPENSE",
+        amount: 450,
+        paymentMode: "CASH",
+        description: "Thermal Paper & Barcode Printer Label Rolls",
+        createdBy: "Counter Operator 1",
+        createdAt: t(6),
+      },
+      {
+        id: "tx-demo-1",
+        sessionId: "demo-session-active",
+        type: "INCOME",
+        category: "BOOKING",
+        amount: 480,
+        paymentMode: "UPI",
+        description: "AWB #DTDC91827364 — Document Air Express",
+        createdBy: "Counter Operator 1",
+        createdAt: t(4),
+      },
+    ];
+
+    const totalIncome = transactions.filter(t => t.type === "INCOME").reduce((acc, t) => acc + t.amount, 0);
+    const totalExpense = transactions.filter(t => t.type === "EXPENSE").reduce((acc, t) => acc + t.amount, 0);
+
+    return {
+      id: "demo-session-active",
+      branchId,
+      openedBy: openedBy || "Counter Operator 1",
+      openedAt: t(25),
+      openingBalance: openingBalance,
+      closingBalance: 0,
+      expectedClosing: openingBalance + totalIncome - totalExpense,
+      difference: 0,
+      status: "OPEN",
+      transactions,
+    };
+  }
+
   static async openCashSession(branchId: string, openedBy: string, openingBalance: number) {
     try {
       const existing = await prisma.cashSession.findFirst({
@@ -33,18 +112,7 @@ export class FinanceService {
         },
       });
     } catch (dbErr) {
-      this.demoSession = {
-        id: "demo-session-active",
-        branchId,
-        openedBy: openedBy || "Counter Operator 1",
-        openedAt: new Date(),
-        openingBalance: Number(openingBalance) || 5000,
-        closingBalance: 0,
-        expectedClosing: Number(openingBalance) || 5000,
-        difference: 0,
-        status: "OPEN",
-        transactions: [],
-      };
+      this.demoSession = this.getInitialDemoSession(branchId, openedBy, Number(openingBalance) || 5000);
       return this.demoSession;
     }
   }
@@ -56,8 +124,14 @@ export class FinanceService {
         include: { transactions: { orderBy: { createdAt: "desc" } } },
       });
       if (session) return session;
+      if (!this.demoSession) {
+        this.demoSession = this.getInitialDemoSession(branchId);
+      }
       return this.demoSession;
     } catch (dbErr) {
+      if (!this.demoSession) {
+        this.demoSession = this.getInitialDemoSession(branchId);
+      }
       return this.demoSession;
     }
   }

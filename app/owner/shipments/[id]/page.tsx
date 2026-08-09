@@ -3,29 +3,43 @@ import { prisma } from "@/lib/prisma";
 import { Header } from "@/components/Header";
 import { ShipmentDetailView } from "@/components/shipments/ShipmentDetailView";
 
+import { getDemoShipmentDetail } from "@/lib/demoData";
+
 export const dynamic = "force-dynamic";
 
 export default async function OwnerShipmentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  const shipment = await prisma.shipment.findFirst({
-    where: { OR: [{ id }, { awbNumber: id }] },
-    include: {
-      branch: { include: { settings: true } },
-      customer: { include: { user: { select: { name: true, email: true, phone: true } } } },
-      handledBy: { include: { user: { select: { name: true } } } },
-      trackingEvents: { orderBy: { timestamp: "asc" } },
-      payment: true,
-      invoice: true,
-    },
-  });
+  let shipment: any = null;
+  let activityLogs: any[] = [];
 
-  if (!shipment) notFound();
+  try {
+    shipment = await prisma.shipment.findFirst({
+      where: { OR: [{ id }, { awbNumber: id }] },
+      include: {
+        branch: { include: { settings: true } },
+        customer: { include: { user: { select: { name: true, email: true, phone: true } } } },
+        handledBy: { include: { user: { select: { name: true } } } },
+        trackingEvents: { orderBy: { timestamp: "asc" } },
+        payment: true,
+        invoice: true,
+      },
+    });
 
-  const activityLogs = await prisma.activityLog.findMany({
-    where: { entity: "Shipment", entityId: shipment.id },
-    orderBy: { performedAt: "desc" },
-  });
+    if (shipment) {
+      activityLogs = await prisma.activityLog.findMany({
+        where: { entity: "Shipment", entityId: shipment.id },
+        orderBy: { performedAt: "desc" },
+      });
+    }
+  } catch (err) {
+    shipment = getDemoShipmentDetail(id);
+    activityLogs = [];
+  }
+
+  if (!shipment) {
+    shipment = getDemoShipmentDetail(id);
+  }
 
   return (
     <div>

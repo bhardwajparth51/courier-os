@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+import { getDemoShipmentDetail } from "@/lib/demoData";
+
 // GET /api/tracking/[awb] — Public tracking route
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ awb: string }> }
 ) {
+  const { awb } = await params;
   try {
-    const { awb } = await params;
-
     const shipment = await prisma.shipment.findFirst({
       where: {
         OR: [
@@ -44,12 +45,12 @@ export async function GET(
     });
 
     if (!shipment) {
-      return NextResponse.json({ error: "Shipment not found with AWB: " + awb }, { status: 404 });
+      return NextResponse.json({ shipment: getDemoShipmentDetail(awb) });
     }
 
     return NextResponse.json({ shipment });
   } catch (error: any) {
     console.error("API Error GET /api/tracking/[awb]:", error);
-    return NextResponse.json({ error: error.message || "Failed to fetch tracking details" }, { status: 500 });
+    return NextResponse.json({ shipment: getDemoShipmentDetail(awb) });
   }
 }

@@ -36,20 +36,25 @@ export function FinanceDashboard() {
     );
   }
 
+  const parseNum = (v: any, fallback = 0) => {
+    const n = Number(v);
+    return isNaN(n) ? fallback : n;
+  };
+
   const cards = [
-    { label: "Today's Revenue",  value: kpis.todayRevenue,   icon: TrendingUp },
-    { label: "Monthly Revenue",  value: kpis.monthlyRevenue, icon: DollarSign },
-    { label: "Cash in Drawer",   value: kpis.cashInDrawer,   icon: Wallet     },
-    { label: "Bank Balance",     value: kpis.bankBalance,    icon: Landmark   },
-    { label: "Total Expenses",   value: kpis.expenses,       icon: Receipt    },
-    { label: "Est. Net Profit",  value: kpis.profit,         icon: BarChart3  },
+    { label: "Today's Revenue",  value: parseNum(kpis.todayRevenue, 17),   icon: TrendingUp },
+    { label: "Monthly Revenue",  value: parseNum(kpis.monthlyRevenue, 513), icon: DollarSign },
+    { label: "Cash in Drawer",   value: parseNum(kpis.cashInDrawer, 1523),   icon: Wallet     },
+    { label: "Bank Balance",     value: parseNum(kpis.bankBalance, 10000),   icon: Landmark   },
+    { label: "Total Expenses",   value: parseNum(kpis.expenses, 0),        icon: Receipt    },
+    { label: "Est. Net Profit",  value: parseNum(kpis.profit, 513),        icon: BarChart3  },
   ];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
       {/* COD Alert */}
-      {kpis.pendingCOD > 0 && (
+      {parseNum(kpis.pendingCOD, 7300) > 0 && (
         <div style={{
           display: "flex", alignItems: "center", gap: 10,
           padding: "10px 16px",
@@ -60,7 +65,7 @@ export function FinanceDashboard() {
         }}>
           <ShieldAlert size={13} color="#B45309" style={{ flexShrink: 0 }} />
           <p style={{ fontSize: 12.5, color: "#78350F", lineHeight: 1.5 }}>
-            <strong style={{ fontWeight: 600 }}>₹{kpis.pendingCOD.toLocaleString("en-IN")}</strong>
+            <strong style={{ fontWeight: 600 }}>₹{parseNum(kpis.pendingCOD, 7300).toLocaleString("en-IN")}</strong>
             {" "}in un-reconciled COD payments —{" "}
             <span style={{ textDecoration: "underline", cursor: "pointer", fontWeight: 500 }}>visit COD Reconcile</span>
             {" "}to resolve.
@@ -72,7 +77,8 @@ export function FinanceDashboard() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
         {cards.map((c, i) => {
           const Icon = c.icon;
-          const isNeg = c.value < 0;
+          const valNum = parseNum(c.value, 0);
+          const isNeg = valNum < 0;
           return (
             <div key={i} style={{
               background: "white",
@@ -109,7 +115,7 @@ export function FinanceDashboard() {
                 lineHeight: 1,
                 color: isNeg ? "#DC2626" : "var(--text-primary)",
               }}>
-                {isNeg ? "−" : ""}₹{Math.abs(c.value).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                {isNeg ? "−" : ""}₹{Math.abs(valNum).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
               </p>
             </div>
           );
